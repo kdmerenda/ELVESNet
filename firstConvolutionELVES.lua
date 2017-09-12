@@ -2,20 +2,38 @@ require 'nn'
 require 'gnuplot'
 require 'image'
 require 'optim'
+require 'cunn'
 
 --load data
 dataPath = "/media/kswiss/ExtraDrive1/ELVESNet/merged/"
 dataAll = torch.load(dataPath..'ALLDataImage.dat')
 labelAll = torch.load(dataPath..'ALLDataLocation.dat')
 
---9781 to play with
-trsize = 1000
-tesize = 7000
-
 --insert a singleton in position 2
 modelSoliton = nn.Unsqueeze(2)
 dataAll = modelSoliton:forward(dataAll)
 print(dataAll:size())
+
+--9781 to play with
+trsize = 7000
+tesize = 1000
+
+--gpu work
+cuda = false
+
+--net input parameters
+n_inputs_1 = 1 --number of input planes to layer 1
+n_filters_1 = 16 --number of convolutional filters to layer 1
+n_inputs_2 = n_filters_1 --number of input planes to layer 2
+n_filters_2 = 128 --number of convolutional filters to layer 2
+n_convx = 2 --conv filter size - use square filter for now? image not square.
+n_convy = 2 --conv filter size - use square filter for now? image not square.
+n_pool = 2 --size of pooling filter
+n_pool_dx = 2 --size of steps by which to move filter.
+
+print_every = 1
+nb_epoch = 5
+
 
 --need to redefine the labels based on discrete grid. For first attempt, define 4 sections instead of continuous possibility of values. Here, the elves were created at random in the following range:   float lowestLON=-68, highestLON=-62;  float lowestLAT=-37, highestLAT=-32; If we discretize a possible grid in which the ELVES can be (eg 4 sections) then all the labels have to be redefined to the number of a given section (eg: 1,2,3,4). For starters, the numbering will be done wrt to the geodetic coordinates (earth cs) not wrt to the detector. I believe this will be useful for when the full detector is used. Define nSections as the number of discrete sections in which an ELVES can be.
 latLow = -37
@@ -103,27 +121,11 @@ print(test_data.size(), " Location of a test ELVES (Section): ",test_data.labels
 --gnuplot.raw("unset colorbox")
 --gnuplot.imagesc(imageSample[1])
 
-
-
-
 ---------------------------
 --Container:
 ---------------------------
 --to be able to plug layers in a feed-forward fully connected manner
 local model = nn.Sequential()
-
-n_inputs_1 = 1 --number of input planes to layer 1
-n_filters_1 = 16 --number of convolutional filters to layer 1
-n_inputs_2 = n_filters_1 --number of input planes to layer 2
-n_filters_2 = 128 --number of convolutional filters to layer 2
-n_convx = 3 --conv filter size - use square filter for now? image not square.
-n_convy = 3 --conv filter size - use square filter for now? image not square.
-n_pool = 2 --size of pooling filter
-n_pool_dx = 2 --size of steps by which to move filter.
-
-print_every = 25
-nb_epoch = 1
-
 
 --===========
 --FIRST LAYER
@@ -155,26 +157,28 @@ model:add(nn.SpatialMaxPooling(n_pool,n_pool,n_pool_dx,n_pool_dx));
 --Miscellanous Layer:
 ---------------------------
 --During training, Dropout masks parts of the input using binary samples from a bernoulli distribution. Each input element has a probability of p of being dropped, i.e having its commensurate output element be zero. This has proven an effective technique for regularization and preventing the co-adaptation of neurons
---model:add(nn.Dropout(0.50));
+model:add(nn.Dropout(0.50));
 
 --============
 --SECOND LAYER
 --============
 model:add(nn.SpatialConvolution(n_inputs_2,n_filters_2,n_convx,n_convy))
-model:add(nn.Tanh())
---model:add(nn.ReLU()) 
+--model:add(nn.Tanh())
+model:add(nn.ReLU()) 
 model:add(nn.SpatialMaxPooling(n_pool,n_pool,n_pool_dx,n_pool_dx));
---model:add(nn.Dropout(0.25));
+model:add(nn.Dropout(0.25));
 
 --===========
 --THIRD LAYER
 --===========
 --this is where the complex space is simplified back to a linear value. Applies a linear transformation to the incoming data, i.e. y = Ax + b. The input tensor given in forward(input) must be either a vector (1D tensor) or matrix (2D tensor)
-model:add(nn.Reshape(n_filters_2*n_convx*n_convy))
-model:add(nn.Linear(n_filters_2*n_convx*n_convy, n_filters_2*n_convx*n_convy))
-model:add(nn.Tanh())
---model:add(nn.ReLU()) 
---model:add(nn.Dropout(0.5));
+--model:add(nn.Reshape(n_filters_2*n_convx*n_convy))
+--model:add(nn.Linear(n_filters_2*n_convx*n_convy, n_filters_2*n_convx*n_convy))
+model:add(nn.Reshape(128*4*14))
+model:add(nn.Linear(n_filters_2*n_convx*n_convy*14, n_filters_2*n_convx*n_convy))
+--model:add(nn.Tanh())
+model:add(nn.ReLU()) 
+model:add(nn.Dropout(0.5));
 model:add(nn.Linear(n_filters_2*n_convx*n_convy, nSectionsTot))
 model:add(nn.LogSoftMax())
 
@@ -192,6 +196,23 @@ local params, grads = model:getParameters()
 --initialize weights. needed?
 params:uniform(-0.01, 0.01)
 
+--===========
+--CUDA
+--===========
+if(cuda) then
+   model:cuda()
+   train_data.data = train_data.data:cuda()
+   train_data.labels = train_data.labels:cuda()
+   test_data.data = test_data.data:cuda()
+   test_data.labels = test_data.labels:cuda()
+   criterion = criterion:cuda()
+end
+
+
+
+--===========
+--OPTIMIZER
+--===========
 -- return loss, grad
 local feval = function(x)
    if x ~= params then
@@ -201,7 +222,7 @@ local feval = function(x)
    
    -- forward
    local outputs = model:forward(train_data.data)
-   local loss = criterion:forward(outputs, data.labels)
+   local loss = criterion:forward(outputs, train_data.labels)
    -- backward
    local dloss_doutput = criterion:backward(outputs, train_data.labels)
    model:backward(train_data.data, dloss_doutput)
@@ -232,11 +253,19 @@ gnuplot.plot({'losses',
 )
 
 
+print("The NN: \n",string.format( model))
+
 --classification error on train set
 local log_probs = model:forward(train_data.data)
 local _, predictions = torch.max(log_probs, 2)
-print(string.format('# correct for %s:', model))
+print('# correct for train set:')
 print(torch.mean(torch.eq(predictions:long(), train_data.labels:long()):double()))
+
+--classification error on test set
+local log_probs = model:forward(test_data.data)
+local _, predictions = torch.max(log_probs, 2)
+print('# correct for test set:')
+print(torch.mean(torch.eq(predictions:long(), test_data.labels:long()):double()))
 
 
 --res = net:forward(imageSample)
