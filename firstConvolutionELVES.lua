@@ -170,15 +170,15 @@ model:add(nn.SpatialMaxPooling(n_pool,n_pool,n_pool_dx,n_pool_dx));
 --Miscellanous Layer:
 ---------------------------
 --During training, Dropout masks parts of the input using binary samples from a bernoulli distribution. Each input element has a probability of p of being dropped, i.e having its commensurate output element be zero. This has proven an effective technique for regularization and preventing the co-adaptation of neurons
-model:add(nn.Dropout(0.50));
-
+--model:add(nn.Dropout(0.50));
+--careful with numbering when making plots and adding layers. 
 --============
 --SECOND LAYER
 --============
 model:add(nn.SpatialConvolution(n_inputs_2,n_filters_2,n_convx,n_convy))
 model:add(nn.Tanh()) 
 model:add(nn.SpatialMaxPooling(n_pool,n_pool,n_pool_dx,n_pool_dx));
-model:add(nn.Dropout(0.25));
+--model:add(nn.Dropout(0.25));
 
 
 --===========
@@ -195,7 +195,7 @@ model:add(nn.Reshape(reshapeInputValues))
 model:add(nn.Linear(reshapeInputValues, 200))
 model:add(nn.Tanh())
 --model:add(nn.ReLU()) 
-model:add(nn.Dropout(0.5));
+--model:add(nn.Dropout(0.5));
 model:add(nn.Linear(200, nSectionsTot))
 model:add(nn.LogSoftMax())
 
