@@ -4,6 +4,7 @@ require 'image'
 require 'optim'
 require 'cunn'
 
+
 --load data
 dataPath = "/media/kswiss/ExtraDrive1/ELVESNet/merged/"
 dataAll = torch.load(dataPath..'ALLDataImage.dat')
