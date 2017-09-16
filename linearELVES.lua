@@ -20,14 +20,16 @@ dataAll = modelSoliton:forward(dataAll)
 
 --9781 to play with --- later found two unsorted elves due to bad latitude values in label. Need to remove them from dataset. 6675 6153. done later. Also ran out of memory with a train set of 8000]
 --numLoops to increment train size and numSubLoop to repeat process x times at each train size. 
-numLoops = 1
-numSubLoops = 1
+numLoops = 14
+numSubLoops = 5
 trsize = torch.Tensor(numLoops)
 for i=1,numLoops do
-   trsize[i] = 5000 + (i-1)*1000
+   trsize[i] = 500 + (i-1)*500
 end
-trerro = torch.Tensor(numLoops,numSubLoops):zero()
-teerro = torch.Tensor(numLoops,numSubLoops):zero()
+trerrolat = torch.Tensor(numLoops,numSubLoops):zero()
+teerrolat = torch.Tensor(numLoops,numSubLoops):zero()
+trerrolon = torch.Tensor(numLoops,numSubLoops):zero()
+teerrolon = torch.Tensor(numLoops,numSubLoops):zero()
 tesize = 1000
 
 --fixing the problem
@@ -49,7 +51,7 @@ cuda = false
 plotsPerEpoch = false
 plotsPerLayer = false
 
-nb_epoch = 10
+nb_epoch = 100
 learningRateValue = 1e-2
 
 --====
@@ -57,6 +59,7 @@ learningRateValue = 1e-2
 --====
 for jj=1,numLoops do
    for kk=1,numSubLoops do
+      print(trsize[jj], kk)
       
       train_data = {}
       test_data = {}
@@ -72,7 +75,7 @@ for jj=1,numLoops do
 	 if torch.mean(input)~=0 then train_data[i-counter] = {input,output} end
 --	 print(train_data[i-counter])
       end
-      print(counter.." empty images int train set")
+      print(counter.." empty images in train set")
       function train_data:size() return trsize[jj]-counter end
 
       counterte = 0
@@ -127,6 +130,7 @@ for jj=1,numLoops do
       -- LOSS FUNCTION
       --==============
       local criterion = nn.MSECriterion()
+      print(model)
       
       --======
       -- TRAIN
@@ -134,6 +138,7 @@ for jj=1,numLoops do
       trainer = nn.StochasticGradient(model, criterion)
       trainer.maxIteration = nb_epoch
       trainer.learningRate = learningRateValue
+      trainer.verbose=false
       trainer:train(train_data)
 
       --classification error on train set -- not sure how to do that. will just do ((E-O)/E)^2
@@ -147,12 +152,37 @@ for jj=1,numLoops do
 	    local prediction = model:forward(traindata.data[i])
 	    local predictionlat = prediction[1][1]
 	    local predictionlon = prediction[1][2]
-	    class_performancelat[i-counterperformance]  = ((groundtruthlat - predictionlat)/groundtruthlat)*((groundtruthlat - predictionlat)/groundtruthlat)
-	    class_performancelon[i-counterperformance]  = ((groundtruthlon - predictionlon)/groundtruthlon)*((groundtruthlon - predictionlon)/groundtruthlon)
+	    class_performancelat[i-counterperformance]  = torch.abs((groundtruthlat - predictionlat)/groundtruthlat)
+	    class_performancelon[i-counterperformance]  = torch.abs((groundtruthlon - predictionlon)/groundtruthlon)
 	    counterperformance = counterperformance+1
 	 end
       end
-      print(counterperformance, torch.mean(class_performancelat), torch.mean(class_performancelon))
+      print("TRAIN ERROR: ",counterperformance, torch.mean(class_performancelat), torch.mean(class_performancelon))
+      trerrolat[jj][kk] = torch.mean(class_performancelat);
+      trerrolon[jj][kk] = torch.mean(class_performancelon);
+
+      --======
+      -- TEST
+      --======
+      class_performancelat = torch.Tensor(testdata:size()-counter):zero()
+      class_performancelon = torch.Tensor(testdata:size()-counter):zero()
+      counterperformance = 0
+      for i=1,testdata.size() do
+      	 local groundtruthlat = testdata.labels[i][1]
+      	 local groundtruthlon = testdata.labels[i][2]
+	 if torch.mean(testdata.data[i]) ~= 0 then
+	    local prediction = model:forward(testdata.data[i])
+	    local predictionlat = prediction[1][1]
+	    local predictionlon = prediction[1][2]
+	    class_performancelat[i-counterperformance]  = torch.abs((groundtruthlat - predictionlat)/groundtruthlat)
+	    class_performancelon[i-counterperformance]  = torch.abs((groundtruthlon - predictionlon)/groundtruthlon)
+--	    print(groundtruthlat,predictionlat,  class_performancelat[i-counterperformance] )
+	    counterperformance = counterperformance+1
+	 end
+      end
+      print("TEST ERROR: ", counterperformance, torch.mean(class_performancelat), torch.mean(class_performancelon))
+      teerrolat[jj][kk] = torch.mean(class_performancelat);
+      teerrolon[jj][kk] = torch.mean(class_performancelon);
       
       model = nil
       traindata = nil
@@ -164,4 +194,23 @@ for jj=1,numLoops do
       collectgarbage()
    end
 end   
+print(torch.mean(trerrolat,2),torch.mean(teerrolat,2))
+print(torch.mean(trerrolon,2),torch.mean(teerrolon,2))
+print(torch.std(trerrolat,2),torch.std(teerrolat,2))
+print(torch.std(trerrolon,2),torch.std(teerrolon,2))
+gnuplot.pngfigure("learningcurvelinear.png")
+gnuplot.plot({'train lat',torch.mean(trerrolat,2)},{'train lon',torch.mean(trerrolon,2)},{'test lat',torch.mean(teerrolat,2)},{'test lon',torch.mean(teerrolon,2)})
+gnuplot.raw("set xlabel 'Training Set Size (x500)'")
+gnuplot.raw("set ylabel 'Mean Error'")
+gnuplot.title("Learning Curve Mean (5 repeats)")
+gnuplot.raw("replot")
+gnuplot.close()
+gnuplot.pngfigure("learningcurvelinearerror.png")
+gnuplot.plot({'train lat',torch.std(trerrolat,2)},{'train lon',torch.std(trerrolon,2)},{'test lat',torch.std(teerrolat,2)},{'test lon',torch.std(teerrolon,2)})
+gnuplot.raw("set xlabel 'Training Set Size (x500)'")
+gnuplot.raw("set ylabel 'Error Std.'")
+gnuplot.title("Learning Curve Std (5 repeats)")
+gnuplot.raw("replot")
+gnuplot.close()
+   
 
