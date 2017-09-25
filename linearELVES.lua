@@ -9,6 +9,9 @@ require 'cunn'
 dataPath = "/media/kswiss/ExtraDrive1/ELVESNet/merged/"
 dataAll = torch.load(dataPath..'ALLDataImage.dat')
 labelAll = torch.load(dataPath..'ALLDataLocation.dat')
+realDataPath = "/media/kswiss/ExtraDrive1/ELVESNet/rawdata/"
+realData = torch.load(realDataPath..'ALLDataImage.dat')
+
 
 --insert a singleton in position 2 to add the dimension of the image channel to the dataset
 modelSoliton = nn.Unsqueeze(2)
@@ -18,19 +21,21 @@ dataAll = modelSoliton:forward(dataAll)
 -- this seems intricate to deal with... for some reason torch uses doubles to initialize all model..
 --torch.setdefaulttensortype('torch.FloatTensor')
 
+
 --9781 to play with --- later found two unsorted elves due to bad latitude values in label. Need to remove them from dataset. 6675 6153. done later. Also ran out of memory with a train set of 8000]
 --numLoops to increment train size and numSubLoop to repeat process x times at each train size. 
-numLoops = 14
-numSubLoops = 5
+numLoops = 1
+numSubLoops = 1
 trsize = torch.Tensor(numLoops)
 for i=1,numLoops do
-   trsize[i] = 500 + (i-1)*500
+   trsize[i] = 7000 + (i-1)*500
 end
 trerrolat = torch.Tensor(numLoops,numSubLoops):zero()
 teerrolat = torch.Tensor(numLoops,numSubLoops):zero()
 trerrolon = torch.Tensor(numLoops,numSubLoops):zero()
 teerrolon = torch.Tensor(numLoops,numSubLoops):zero()
 tesize = 1000
+
 
 --fixing the problem
 data1 = dataAll[{ {1,6153-1},{},{} }]
@@ -42,10 +47,8 @@ label3 = labelAll[{ {6675+1,dataAll:size()[1]},{} }]
 
 dataAll = torch.cat(data1,data2,1):cat(data3,1)
 labelAll = torch.cat(label1,label2,1):cat(label3,1)
---9779 ELVES left to play with.
 
---gpu work
-cuda = false
+--9779 ELVES left to play with.
 
 --plots
 plotsPerEpoch = false
@@ -79,21 +82,26 @@ for jj=1,numLoops do
       function train_data:size() return trsize[jj]-counter end
 
       counterte = 0
+      countertarget = 7608
       for i=trsize[jj]+1,trsize[jj]+1+tesize do
 	 local input=torch.Tensor(dataAll[i])
 	 if torch.mean(input)==0 then
 	    counterte = counterte + 1
 	 end
+	 if torch.mean(input)==0 and i <= 7608 then
+	    countertarget = countertarget - 1
+	 end
 	 local output=torch.Tensor(labelAll[i])
 	 if torch.mean(input)~=0 then test_data[i-counterte-(trsize[jj]+1)] = {input,output} end
-      end      
+      end
+      print("target: "..countertarget)
       print(counterte.." empty images in test set")
       function test_data:size() return tesize-counterte end
 
       --final sizes
       print(train_data:size(), " ELVES in train dataset.")
       print(test_data:size(), " ELVES in test dataset.")
-
+      
       
       --save the data in a struct and format to test the nn after... diff than what Stochastic gradient requires
       traindata = {
@@ -106,7 +114,12 @@ for jj=1,numLoops do
 	 labels = labelAll[{ {trsize[jj]+1,trsize[jj]+tesize} }],
 	 size = function() return tesize end
       }
-
+      realdata = {
+	 data = realData,
+	 labels = labelAll[{ {1,1}}]:zero(),
+	 size = function() return 1 end
+      }
+      
       ---------------------------
       --Container:
       ---------------------------
@@ -184,6 +197,14 @@ for jj=1,numLoops do
       teerrolat[jj][kk] = torch.mean(class_performancelat);
       teerrolon[jj][kk] = torch.mean(class_performancelon);
       
+      --test on real data.
+      print("\n Real event reconstructed latitude and longitude: ")
+      local prediction = model:forward(realdata.data)
+      local predictionlat = prediction[1][1]
+      local predictionlon = prediction[1][2]
+      print(predictionlat,predictionlon)
+
+
       model = nil
       traindata = nil
       testdata = nil
@@ -192,6 +213,8 @@ for jj=1,numLoops do
       criterion = nil
 
       collectgarbage()
+
+
    end
 end   
 print(torch.mean(trerrolat,2),torch.mean(teerrolat,2))
