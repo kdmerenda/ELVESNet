@@ -253,25 +253,35 @@ class_performancelon = torch.Tensor(test_data:size()):zero()
 counterperformance = 0
 latitudeperformance = 0
 longitudeperformance = 0
+testrealLat = torch.Tensor(test_data:size()):zero()
+testpredLat = torch.Tensor(test_data:size()):zero()
+testrealLon = torch.Tensor(test_data:size()):zero()
+testpredLon = torch.Tensor(test_data:size()):zero()
+isnotblank = torch.Tensor(test_data:size()):zero()
 for i=1,test_data:size() do
    local groundtruthlat = test_data.labels[i][1]
    local groundtruthlon = test_data.labels[i][2]
+   local prediction = model:forward(test_data.data[i])
+   local predictionlat = prediction[1][1]
+   local predictionlon = prediction[1][2]
    if torch.mean(test_data.data[i]) ~= 0 then
-      local prediction = model:forward(test_data.data[i])
-      local predictionlat = prediction[1][1]
-      local predictionlon = prediction[1][2]
+      isnotblank[i] = 1
       class_performancelat[i-counterperformance]  = torch.abs((groundtruthlat - predictionlat)*(groundtruthlat - predictionlat))
       class_performancelon[i-counterperformance]  = torch.abs((groundtruthlon - predictionlon)*(groundtruthlon - predictionlon))
       latitudeperformance = latitudeperformance + class_performancelat[i-counterperformance]
       longitudeperformance = longitudeperformance + class_performancelon[i-counterperformance] 
       counterperformance = counterperformance+1
    end
+   testrealLat[i] = groundtruthlat
+   testpredLat[i] = predictionlat
+   testrealLon[i] = groundtruthlon
+   testpredLon[i] = predictionlon
 end
 print("TEST ERROR (w/o blanks): ", counterperformance, latitudeperformance/counterperformance,longitudeperformance/counterperformance)
 
 --clear GPU
-test_data.data = nil
-test_data.labels = nil
+--test_data.data = nil
+--test_data.labels = nil
 
 --===============
 -- TEST REAL DATA
@@ -313,8 +323,12 @@ end
 print("REAL ERROR: ", counterperf, latitudeperformance/counterperf, longitudeperformance/counterperf)
 
 
-for i=1,real_data:size() do
-   print(realName[i] .. " " .. realLat[i].." "..predLat[i].." "..realLon[i].." "..predLon[i].." "..intrainFOV[i])
+--for i=1,real_data:size() do
+--   print(realName[i] .. " " .. realLat[i].." "..predLat[i].." "..realLon[i].." "..predLon[i].." "..intrainFOV[i])
+--end
+
+for i=1,test_data:size() do
+   print("simulation " .. testrealLat[i].." "..testpredLat[i].." "..testrealLon[i].." "..testpredLon[i].." "..isnotblank[i])
 end
 
 --the good stuff

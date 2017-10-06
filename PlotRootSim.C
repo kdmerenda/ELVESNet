@@ -77,9 +77,9 @@ vector<Float_t> v_az(NPIXELS);
 vector<Float_t> v_el(NPIXELS);
 
 
-void PlotRoot(){
+void PlotRootSim(){
   TTree * tree = new TTree("tree","tree");
-  tree->ReadFile("/home/kswiss/Workspace/worktorch/ELVESNet/output_171004/outputForROOTB.txt","name/C:lattrue/F:latpred/F:lontrue/F:lonpred/F:intrainFOV/I");
+  tree->ReadFile("/home/kswiss/Workspace/worktorch/ELVESNet/testData.txt","name/C:lattrue/F:latpred/F:lontrue/F:lonpred/F:isnotblank/I");
   TH2F * histlat = new TH2F("histlat","Latitude MSE Heat Map in Truth Coord. (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
   TH2F * histlon = new TH2F("histlon","Longitude MSE Heat Map in Truth Coord. (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
   TH2F * histlatcount = new TH2F("histlatcount","Counts (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
@@ -100,13 +100,13 @@ void PlotRoot(){
   TGraph *glonconfOUT = new TGraph(tree->GetEntries());
   float lattrue,lontrue,latpred,lonpred;
   float laterro,lonerro;
-  int intrainFOV;
+  int isnotblank;
   
   tree->SetBranchAddress("lattrue",&lattrue);
   tree->SetBranchAddress("lontrue",&lontrue);
   tree->SetBranchAddress("latpred",&latpred);
   tree->SetBranchAddress("lonpred",&lonpred);
-  tree->SetBranchAddress("intrainFOV",&intrainFOV);
+  tree->SetBranchAddress("isnotblank",&isnotblank);
 
   float counter = 0;
   for(int i = 0; i < tree->GetEntries(); i++){
@@ -118,7 +118,7 @@ void PlotRoot(){
     histloncount->Fill(lonpred,latpred);
     histlatp->Fill(lonpred,latpred,(lattrue-latpred)*(lattrue-latpred));
     histlonp->Fill(lonpred,latpred,(lontrue-lonpred)*(lontrue-lonpred));
-    if(intrainFOV){
+    if(isnotblank){
       histlatzoom->Fill(lontrue,lattrue,(lattrue-latpred)*(lattrue-latpred));
       histlonzoom->Fill(lontrue,lattrue,(lontrue-lonpred)*(lontrue-lonpred));
       histlatcountzoom->Fill(lontrue,lattrue);
@@ -249,8 +249,8 @@ void PlotRoot(){
   int FOVflag = 1;
   for(int i = 0; i < nentries; i++){
     tree->GetEntry(i);
-    if(!FOVflag) intrainFOV=1;
-    if(intrainFOV){
+    if(!FOVflag) isnotblank=1;
+    if(isnotblank){
       laterror.Fill(i+1,(lattrue-latpred)*(lattrue-latpred));
       lonerror.Fill(i+1,(lontrue-lonpred)*(lontrue-lonpred));
     }
@@ -270,12 +270,13 @@ void PlotRoot(){
     tree->GetEntry(i);
     laterrorPalette[i] = (int)MaxColours * (laterror.GetBinContent(i+1) - 1.0*laterror.GetMinimum()) / (1.1*laterror.GetMaximum()- 1.0*laterror.GetMinimum())+ palette[0];
     lonerrorPalette[i] = (int)MaxColours * (lonerror.GetBinContent(i+1) - 1.0*lonerror.GetMinimum()) / (1.1*lonerror.GetMaximum()- 1.0*lonerror.GetMinimum())+ palette[0];
-    cout << intrainFOV << " " << lattrue << " " << lontrue << " "  << laterrorPalette[i] << " " << lonerrorPalette[i] <<  " " << laterror.GetBinContent(i+1) << " " << lonerror.GetBinContent(i+1) << endl;
+    cout << isnotblank << " " << lattrue << " " << lontrue << " "  << laterrorPalette[i] << " " << lonerrorPalette[i] <<  " " << laterror.GetBinContent(i+1) << " " << lonerror.GetBinContent(i+1) << endl;
 
     glaterror[i] = new TGraph(1);
     glonerror[i] = new TGraph(1);
-    if(!FOVflag) intrainFOV=1;
-    if(intrainFOV){
+    if(!FOVflag) isnotblank=1;
+    //    if(isnotblank && laterrorPalette[i]>palette[0]+10){
+    if(isnotblank){
       glaterror[i]->SetPoint(i,lontrue,lattrue);
       glaterror[i]->SetMarkerColor(laterrorPalette[i]);
       glaterror[i]->SetMarkerSize(2.0);
@@ -289,7 +290,8 @@ void PlotRoot(){
     glaterrorp[i] = new TGraph(1);
     glonerrorp[i] = new TGraph(1);
 	     
-    if(intrainFOV){
+    //    if(isnotblank && laterrorPalette[i]>palette[0]+10){
+    if(isnotblank){
       glaterrorp[i]->SetPoint(i,lonpred,latpred);
       glaterrorp[i]->SetMarkerColor(laterrorPalette[i]);
       glaterrorp[i]->SetMarkerSize(2.0);
@@ -380,21 +382,21 @@ void PlotRoot(){
   c1.SaveAs("mselonpred.png");
 
 
-  TH1F* distanceDev = new TH1F("distanceDev","Prediction Distance from Truth;Distance (km);Number of ELVES",30,0,600);
-  TH1F* distanceDevOUT = new TH1F("distanceDev","Prediction Distance from Truth;Distance (km);Number of ELVES",30,0,600);
+  TH1F* distanceDev = new TH1F("distanceDev","Prediction Distance from Truth;Distance (km);Number of ELVES",30,0,200);
+  TH1F* distanceDevOUT = new TH1F("distanceDev","Prediction Distance from Truth;Distance (km);Number of ELVES",100,0,200);
   for(int i = 0; i < nentries; i++){
     tree->GetEntry(i);
     cout << distanceEarth(lattrue,lontrue,latpred,lonpred) << endl;
-    if(intrainFOV) distanceDev->Fill(distanceEarth(lattrue,lontrue,latpred,lonpred));
-    distanceDevOUT->Fill(distanceEarth(lattrue,lontrue,latpred,lonpred));
+    //    distanceDev->Fill(distanceEarth(lattrue,lontrue,latpred,lonpred));
+    if(isnotblank) distanceDevOUT->Fill(distanceEarth(lattrue,lontrue,latpred,lonpred));
   }
   //  gStyle->SetOptStat(1);
   TLegend * legend = new TLegend(0.5,0.6,0.9,0.8);
   legend->SetTextSize(0.03);
   legend->SetTextFont(52);
   legend->SetBorderSize(0);
-  legend->AddEntry(distanceDev,"Inside training range","f");
-  legend->AddEntry(distanceDevOUT,"Outside training range","f");
+  //legend->AddEntry(distanceDev,"Inside training range","f");
+  //legend->AddEntry(distanceDevOUT,"Outside training range","f");
   distanceDevOUT->SetMarkerStyle(20);
   distanceDevOUT->SetMarkerColor(palette[0]+15);
   distanceDevOUT->SetFillColorAlpha(palette[0]+15,0.2);
@@ -409,7 +411,7 @@ void PlotRoot(){
   distanceDev->SetMarkerColor(palette[0]+45);
   distanceDev->SetFillColorAlpha(palette[0]+45,0.2);
   distanceDev->SetMarkerSize(1.5);
-  distanceDev->Draw("SAME");
+  //distanceDev->Draw("SAME");
   legend->Draw();
   c1.SaveAs("distanceDev.png");
   
