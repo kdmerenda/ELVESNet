@@ -59,15 +59,10 @@ collectgarbage()
 --9779 ELVES left to play with but had to reduce the count to allow fro multiplicity of multipage events.
 --need to implement 1, 2,and 3 page events to teach the NN, for that I will set to 0 ranges in traces from 51 to 150 and from 100 to 150 and cat into the dataset, effectively creating 9779*3 elves, the labes will be the same. 
 dataAll = torch.cat(dataAll,dataAll,1):cat(dataAll,1)
---dataAll = torch.cat(dataAll,dataAll,1)
 labelAll = torch.cat(labelAll,labelAll,1):cat(labelAll,1)
---labelAll = torch.cat(labelAll,labelAll,1)
 dataAll[{ {originalSimDataSize+1,2*originalSimDataSize},{},{51,150} }] = 0 
 dataAll[{ {2*originalSimDataSize+1,3*originalSimDataSize},{},{101,150} }] = 0 
-print(originalSimDataSize, dataAll:size(1))
---gnuplot.pngfigure('threepage.png')
---gnuplot.imagesc(dataAll[originalSimDataSize+2],'color')
---gnuplot.plotflush()
+print("Before there was " .. originalSimDataSize.." inputs, Now there are: ".. dataAll:size(1))
 
 --scramble multipage events
 local shuffle = torch.randperm(dataAll:size(1))

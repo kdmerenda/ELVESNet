@@ -1,7 +1,29 @@
+#include <TMap.h>
+#include <TTree.h>
+#include "TVirtualFFT.h"
+#include <TGraph.h>
+#include <TCanvas.h>
+#include <TCutG.h>
+#include <TH2D.h>
+#include <THStack.h>
+#include <TPaletteAxis.h>
+#include <TLegend.h>
+#include <TStyle.h>
+#include <TLatex.h>
+#include <TH1F.h>
+#include <TAxis.h>
+#include <TF1.h>
+#include <TFile.h>
+#include <TImage.h>
+#include <TColor.h>
+#include "TSpectrum.h"
+#include <TVector3.h>
+#include <vector>
+#include "TPolyMarker.h"
 
 void PlotRoot(){
   TTree * tree = new TTree("tree","tree");
-  tree->ReadFile("/home/kswiss/Workspace/worktorch/ELVESNet/outputForROOTB.txt","name/C:lattrue/F:latpred/F:lontrue/F:lonpred/F:intrainFOV/I");
+  tree->ReadFile("/home/kswiss/Workspace/worktorch/ELVESNet/output_171004/outputForROOTB.txt","name/C:lattrue/F:latpred/F:lontrue/F:lonpred/F:intrainFOV/I");
   TH2F * histlat = new TH2F("histlat","Latitude MSE Heat Map in Truth Coord. (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
   TH2F * histlon = new TH2F("histlon","Longitude MSE Heat Map in Truth Coord. (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
   TH2F * histlatcount = new TH2F("histlatcount","Counts (All Events);True Longitude;True Latitude",16,-68,-60,16,-38,-30);
@@ -145,4 +167,122 @@ void PlotRoot(){
   llon.SetLineColor(kBlack);
   llon.Draw("");
   c1.SaveAs("lonerrorconf.png");
+
+  const int NRGBs = 5;
+  const int MaxColours = 127;//roberto changed this to 127 in reconstruction
+  int palette[MaxColours];
+  Double_t stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
+  Double_t red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
+  Double_t green[NRGBs] = { 0.00, 0.81, 1.00, 0.20, 0.00 };
+  Double_t blue[NRGBs]  = { 0.51, 1.00, 0.12, 0.00, 0.00 };
+  Int_t FI = TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, MaxColours);
+  for (int i=0;i<MaxColours;i++) {
+    palette[i] = FI+i;
+    //    cout << palette[i] << endl;
+  }
+  TColor::SetPalette(MaxColours,palette);
+  gStyle->SetNumberContours(MaxColours);//only do the analysis if dealing with the run of choice.
+
+  //fhIntegralPixelPalette[j] = (int)MaxColours * (fhIntegralPixel->GetBinContent(j+1) - 1.0*fhIntegralPixel->GetMinimum())/(1.1*fhIntegralPixel->GetMaximum()- 1.0*fhIntegralPixel->GetMinimum()) + palette[0] ;
+  TH1F laterror("laterror","",tree->GetEntries(),1,tree->GetEntries()); 
+  TH1F lonerror("lonerror","",tree->GetEntries(),1,tree->GetEntries()); 
+  const int nentries = (const int)tree->GetEntries();
+  cout << "HERE" << endl;
+  int laterrorPalette[nentries];
+  int lonerrorPalette[nentries];
+  int FOVflag = 1;
+  for(int i = 0; i < nentries; i++){
+    tree->GetEntry(i);
+    if(!FOVflag) intrainFOV=1;
+    if(intrainFOV){
+      laterror.Fill(i+1,(lattrue-latpred)*(lattrue-latpred));
+      lonerror.Fill(i+1,(lontrue-lonpred)*(lontrue-lonpred));
+    }
+  }
+
+  TGraph* glaterror[nentries];
+  TGraph* glonerror[nentries];
+  TGraph* glaterrorp[nentries];
+  TGraph* glonerrorp[nentries];
+  for(int i = 0; i < nentries; i++){
+    tree->GetEntry(i);
+    laterrorPalette[i] = (int)MaxColours * (laterror.GetBinContent(i+1) - 1.0*laterror.GetMinimum()) / (1.0*laterror.GetMaximum()- 1.0*laterror.GetMinimum())+ palette[0];
+    lonerrorPalette[i] = (int)MaxColours * (lonerror.GetBinContent(i+1) - 1.0*lonerror.GetMinimum()) / (1.0*lonerror.GetMaximum()- 1.0*lonerror.GetMinimum())+ palette[0];
+    cout << intrainFOV << " " << lattrue << " " << lontrue << " "  << laterrorPalette[i] << " " << lonerrorPalette[i] <<  " " << laterror.GetBinContent(i+1) << " " << lonerror.GetBinContent(i+1) << endl;
+
+    glaterror[i] = new TGraph(1);
+    glonerror[i] = new TGraph(1);
+    if(!FOVflag) intrainFOV=1;
+    if(intrainFOV){
+      glaterror[i]->SetPoint(i,lontrue,lattrue);
+      glaterror[i]->SetMarkerColor(laterrorPalette[i]);
+      glaterror[i]->SetMarkerSize(2.0);
+      glaterror[i]->SetMarkerStyle(20);
+      
+      glonerror[i]->SetPoint(i,lontrue,lattrue);
+      glonerror[i]->SetMarkerColor(lonerrorPalette[i]);
+      glonerror[i]->SetMarkerSize(2.0);
+      glonerror[i]->SetMarkerStyle(20);
+    }
+    glaterrorp[i] = new TGraph(1);
+    glonerrorp[i] = new TGraph(1);
+	     
+    if(intrainFOV){
+      glaterrorp[i]->SetPoint(i,lonpred,latpred);
+      glaterrorp[i]->SetMarkerColor(laterrorPalette[i]);
+      glaterrorp[i]->SetMarkerSize(2.0);
+      glaterrorp[i]->SetMarkerStyle(20);
+      
+      glonerrorp[i]->SetPoint(i,lonpred,latpred);
+      glonerrorp[i]->SetMarkerColor(lonerrorPalette[i]);
+      glonerrorp[i]->SetMarkerSize(2.0);
+      glonerrorp[i]->SetMarkerStyle(20);
+    }
+  }
+
+  
+  TH2F * histlatitude = new TH2F("histlatitude","MSE LATITUDE TRUTH MAP;True Longitude;True Latitude;MSE",40,-68,-60,nentries,-38,-30);
+  histlatitude->GetYaxis()->SetTitleOffset(1.85);
+  histlatitude->GetYaxis()->SetLabelSize(0.026);
+  histlatitude->GetXaxis()->SetLabelSize(0.026);
+  histlatitude->GetXaxis()->SetTitleSize(0.026);
+  histlatitude->GetYaxis()->SetTitleSize(0.026);
+  for (int i=0;i<nentries;i++) {
+    histlatitude->SetBinContent(0,i+1,laterror.GetBinContent(i+1));
+  }
+  histlatitude->GetZaxis()->SetRangeUser(laterror.GetMinimum(),laterror.GetMaximum());
+  histlatitude->Draw("colz");
+  gPad->Update();
+  TPaletteAxis *paletteaxis = (TPaletteAxis*)histlatitude->GetListOfFunctions()->FindObject("palette");
+  paletteaxis->SetX1NDC(0.90);
+  paletteaxis->SetY1NDC(0.1);
+  paletteaxis->SetX2NDC(0.925);
+  paletteaxis->SetY2NDC(0.9);
+  for(int i = 0; i < nentries; i++){
+    glaterror[i]->Draw("P");
+  }
+  c1.SaveAs("mselattruth.png");
+  histlatitude->SetTitle("MSE LATITUDE PREDICTED MAP;Predicted Longitude;Predicted Latitude;MSE");
+  histlatitude->Draw("colz");
+  for(int i = 0; i < nentries; i++){
+    glaterrorp[i]->Draw("P");
+  }
+  c1.SaveAs("mselatpred.png");
+  histlatitude->SetTitle("MSE LONGITUDE TRUTH MAP;True Longitude;True Latitude;MSE");
+  for (int i=0;i<nentries;i++) {
+    histlatitude->SetBinContent(0,i+1,lonerror.GetBinContent(i+1));
+  }
+  histlatitude->GetZaxis()->SetRangeUser(lonerror.GetMinimum(),lonerror.GetMaximum());
+  histlatitude->Draw("colz");
+  for(int i = 0; i < nentries; i++){
+    glonerror[i]->Draw("P");
+  }
+  c1.SaveAs("mselontruth.png");
+  histlatitude->SetTitle("MSE LONGITUDE PREDICTED MAP;Predicted Longitude;Predicted Latitude;MSE");
+  histlatitude->Draw("colz");
+  for(int i = 0; i < nentries; i++){
+    glonerrorp[i]->Draw("P");
+  }
+  c1.SaveAs("mselonpred.png");
+
 }
